@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FileDrop — peer-to-peer file transfer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #16181D;
+    --paper: #F7F5F0;
+    --paper-dim: #EFEBE2;
+    --signal: #FF5A1F;
+    --signal-dim: #FFD9C4;
+    --wire: #2B6A5E;
+    --wire-dim: #D7E8E3;
+    --line: #D8D4C8;
+    --danger: #C23B22;
+    --radius: 2px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  header.site {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .wordmark {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: -0.02em;
+  }
+  .wordmark span { color: var(--signal); }
+
+  .tagline {
+    font-size: 13px;
+    color: #6b6a64;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .p2p-note {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--wire);
+    background: var(--wire-dim);
+    border: 1px solid #BBD8CF;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    margin-bottom: 32px;
+  }
+
+  .ticket-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    position: relative;
+    margin-bottom: 0;
+  }
+
+  .ticket-tabs button {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 16px 12px;
+    background: var(--paper-dim);
+    border: 1px solid var(--line);
+    border-bottom: none;
+    color: #8a8878;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease;
+  }
+
+  .ticket-tabs button:first-child { border-right: none; }
+
+  .ticket-tabs button.active {
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  .ticket-tabs button:not(.active):hover {
+    background: #E6E1D4;
+  }
+
+  .panel {
+    border: 1px solid var(--line);
+    background: var(--paper);
+    position: relative;
+    padding: 36px 32px;
+  }
+
+  h2.panel-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #8a8878;
+    margin: 0 0 24px;
+  }
+
+  .dropzone {
+    border: 1.5px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 120ms ease, background 120ms ease;
+  }
+  .dropzone.hover {
+    border-color: var(--signal);
+    background: var(--signal-dim);
+  }
+  .dropzone p.main {
+    font-size: 15px;
+    margin: 0 0 4px;
+  }
+  .dropzone p.sub {
+    font-size: 13px;
+    color: #8a8878;
+    margin: 0;
+  }
+  .dropzone input { display: none; }
+
+  .file-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid var(--line);
+    background: var(--paper-dim);
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    margin-top: 16px;
+    font-size: 14px;
+  }
+  .file-chip .name { font-weight: 600; word-break: break-all; }
+  .file-chip .size { color: #8a8878; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: nowrap; }
+  .file-chip button {
+    background: none;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    text-decoration: underline;
+    padding: 0;
+  }
+
+  button.primary {
+    width: 100%;
+    margin-top: 20px;
+    padding: 14px 20px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 120ms ease, transform 80ms ease;
+  }
+  button.primary:hover:not(:disabled) { background: #000; }
+  button.primary:active:not(:disabled) { transform: translateY(1px); }
+  button.primary:disabled {
+    background: var(--line);
+    color: #a8a496;
+    cursor: not-allowed;
+  }
+
+  .stub {
+    margin-top: 28px;
+    border: 1.5px dashed var(--ink);
+    border-radius: 4px;
+    padding: 28px 24px;
+    text-align: center;
+    position: relative;
+    background:
+      radial-gradient(circle at 0 50%, var(--paper) 8px, transparent 8.5px),
+      radial-gradient(circle at 100% 50%, var(--paper) 8px, transparent 8.5px);
+    background-color: #FFFDF9;
+  }
+  .stub .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #8a8878;
+    margin-bottom: 10px;
+  }
+  .stub .code {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: 56px;
+    letter-spacing: 0.08em;
+    color: var(--signal);
+    line-height: 1;
+  }
+  .stub .meta {
+    margin-top: 12px;
+    font-size: 12px;
+    color: #6b6a64;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .stub .copy-row {
+    margin-top: 16px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+  }
+  .stub .copy-row button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    padding: 8px 14px;
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .stub .copy-row button:hover { border-color: var(--ink); }
+
+  .code-input-row {
+    display: flex;
+    gap: 12px;
+  }
+  .code-input-row input {
+    flex: 1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    text-align: center;
+    padding: 14px 10px;
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper-dim);
+    color: var(--ink);
+  }
+  .code-input-row input:focus {
+    outline: none;
+    border-color: var(--wire);
+  }
+
+  .preview-card {
+    margin-top: 20px;
+    border: 1px solid var(--wire);
+    background: var(--wire-dim);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: none;
+  }
+  .preview-card.show { display: block; }
+  .preview-card .name { font-weight: 600; font-size: 14px; word-break: break-all; }
+  .preview-card .size { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #3d5e57; margin-top: 4px; }
+
+  .status {
+    margin-top: 16px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    display: none;
+  }
+  .status.show { display: block; }
+  .status.error { background: #FBE4DD; color: var(--danger); border: 1px solid #EFB3A0; }
+  .status.success { background: var(--wire-dim); color: var(--wire); border: 1px solid #BBD8CF; }
+  .status.info { background: var(--paper-dim); color: #6b6a64; border: 1px solid var(--line); }
+
+  .progress-track {
+    margin-top: 16px;
+    height: 6px;
+    background: var(--paper-dim);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    display: none;
+  }
+  .progress-track.show { display: block; }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--signal);
+    transition: width 120ms ease;
+  }
+  .progress-pct {
+    margin-top: 6px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #8a8878;
+    text-align: right;
+    display: none;
+  }
+  .progress-pct.show { display: block; }
+
+  footer.note {
+    margin-top: 32px;
+    font-size: 12px;
+    color: #8a8878;
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+
+  @media (max-width: 480px) {
+    .stub .code { font-size: 42px; letter-spacing: 0.05em; }
+    .panel { padding: 28px 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="site">
+    <div class="wordmark">FILE<span>DROP</span></div>
+    <div class="tagline">claim-ticket file transfer</div>
+  </header>
+
+  <div class="p2p-note">peer-to-peer · your file streams directly to the receiver's browser, never stored on a server · both browser tabs must stay open during transfer</div>
+
+  <div class="ticket-tabs">
+    <button id="tabSend" class="active" onclick="switchTab('send')">Send</button>
+    <button id="tabReceive" onclick="switchTab('receive')">Receive</button>
+  </div>
+
+  <!-- SEND PANEL -->
+  <section class="panel" id="panelSend">
+    <h2 class="panel-title">Drop a file, get a code</h2>
+
+    <div class="dropzone" id="dropzone">
+      <p class="main">Drag a file here, or click to choose</p>
+      <p class="sub">Any format · size limited only by both devices' memory/browser</p>
+      <input type="file" id="fileInput" />
+    </div>
+
+    <div id="fileChipHolder"></div>
+
+    <button class="primary" id="sendBtn" disabled>Generate code</button>
+
+    <div class="stub" id="stub" style="display:none;">
+      <div class="label" id="stubLabel">Your claim code · waiting for receiver</div>
+      <div class="code" id="stubCode">0000</div>
+      <div class="meta" id="stubMeta"></div>
+      <div class="copy-row">
+        <button id="copyCodeBtn">Copy code</button>
+      </div>
+    </div>
+
+    <div class="progress-track" id="sendProgressTrack">
+      <div class="progress-fill" id="sendProgressFill"></div>
+    </div>
+    <div class="progress-pct" id="sendProgressPct"></div>
+
+    <div class="status" id="sendStatus"></div>
+  </section>
+
+  <!-- RECEIVE PANEL -->
+  <section class="panel" id="panelReceive" style="display:none;">
+    <h2 class="panel-title">Enter the 4-digit code</h2>
+
+    <div class="code-input-row">
+      <input type="text" id="codeInput" maxlength="4" inputmode="numeric" placeholder="0000" />
+    </div>
+
+    <div class="preview-card" id="previewCard">
+      <div class="name" id="previewName"></div>
+      <div class="size" id="previewSize"></div>
+    </div>
+
+    <button class="primary" id="receiveBtn" disabled>Connect &amp; download</button>
+
+    <div class="progress-track" id="receiveProgressTrack">
+      <div class="progress-fill" id="receiveProgressFill"></div>
+    </div>
+    <div class="progress-pct" id="receiveProgressPct"></div>
+
+    <div class="status" id="receiveStatus"></div>
+  </section>
+
+  <footer class="note">a code works once — both browser tabs must stay open until the transfer finishes</footer>
+</div>
+
+<script>
+  // ====================== shared helpers ======================
+  function switchTab(tab) {
+    const isSend = tab === 'send';
+    document.getElementById('panelSend').style.display = isSend ? 'block' : 'none';
+    document.getElementById('panelReceive').style.display = isSend ? 'none' : 'block';
+    document.getElementById('tabSend').classList.toggle('active', isSend);
+    document.getElementById('tabReceive').classList.toggle('active', !isSend);
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  }
+
+  function showStatus(el, message, type) {
+    el.textContent = message;
+    el.className = 'status show ' + type;
+  }
+  function hideStatus(el) {
+    el.className = 'status';
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // Public STUN servers — needed so two browsers behind NAT/routers can find a direct path.
+  // No file data ever goes through these; they only help establish the connection.
+  const RTC_CONFIG = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  };
+
+  const CHUNK_SIZE = 16 * 1024; // 16KB chunks over the data channel
+  const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const SIGNAL_URL = `${wsProtocol}//${location.host}`;
+
+  // ====================== SEND PANEL ======================
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const fileChipHolder = document.getElementById('fileChipHolder');
+  const sendBtn = document.getElementById('sendBtn');
+  const sendStatus = document.getElementById('sendStatus');
+  const stub = document.getElementById('stub');
+  const stubLabel = document.getElementById('stubLabel');
+  const stubCode = document.getElementById('stubCode');
+  const stubMeta = document.getElementById('stubMeta');
+  const sendProgressTrack = document.getElementById('sendProgressTrack');
+  const sendProgressFill = document.getElementById('sendProgressFill');
+  const sendProgressPct = document.getElementById('sendProgressPct');
+
+  let selectedFile = null;
+  let senderSocket = null;
+  let senderPeerConnection = null;
+  let senderDataChannel = null;
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('hover'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('hover'));
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('hover');
+    if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) setFile(fileInput.files[0]);
+  });
+
+  function setFile(file) {
+    selectedFile = file;
+    fileChipHolder.innerHTML = `
+      <div class="file-chip">
+        <span class="name">${escapeHtml(file.name)}</span>
+        <span class="size">${formatBytes(file.size)}</span>
+        <button id="clearFileBtn">remove</button>
+      </div>
+    `;
+    document.getElementById('clearFileBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectedFile = null;
+      fileInput.value = '';
+      fileChipHolder.innerHTML = '';
+      sendBtn.disabled = true;
+    });
+    sendBtn.disabled = false;
+    hideStatus(sendStatus);
+    stub.style.display = 'none';
+  }
+
+  sendBtn.addEventListener('click', () => {
+    if (!selectedFile) return;
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Connecting…';
+    hideStatus(sendStatus);
+
+    senderSocket = new WebSocket(SIGNAL_URL);
+
+    senderSocket.addEventListener('open', () => {
+      senderSocket.send(JSON.stringify({
+        type: 'register-sender',
+        fileMeta: { name: selectedFile.name, size: selectedFile.size, mime: selectedFile.type || 'application/octet-stream' }
+      }));
+    });
+
+    senderSocket.addEventListener('message', (event) => {
+      const msg = JSON.parse(event.data);
+
+      if (msg.type === 'code-assigned') {
+        stubLabel.textContent = 'Your claim code · waiting for receiver';
+        stubCode.textContent = msg.code;
+        stubMeta.textContent = `${selectedFile.name} · ${formatBytes(selectedFile.size)}`;
+        stub.style.display = 'block';
+        sendBtn.textContent = 'Generate code';
+        showStatus(sendStatus, 'Code ready. Share it with the receiver — keep this tab open.', 'info');
+      }
+
+      if (msg.type === 'expired') {
+        showStatus(sendStatus, 'Code expired with no receiver. Click "Generate code" to try again.', 'error');
+        stub.style.display = 'none';
+        sendBtn.disabled = false;
+      }
+
+      if (msg.type === 'receiver-joined') {
+        stubLabel.textContent = 'Receiver connected · negotiating link';
+        showStatus(sendStatus, 'Receiver found your code. Establishing direct connection…', 'info');
+        startSenderPeerConnection();
+      }
+
+      if (msg.type === 'signal') {
+        handleSenderSignal(msg.data);
+      }
+
+      if (msg.type === 'peer-disconnected') {
+        showStatus(sendStatus, 'Receiver disconnected before the transfer finished.', 'error');
+      }
+    });
+
+    senderSocket.addEventListener('error', () => {
+      showStatus(sendStatus, 'Could not reach the signaling server.', 'error');
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Generate code';
+    });
+  });
+
+  function startSenderPeerConnection() {
+    senderPeerConnection = new RTCPeerConnection(RTC_CONFIG);
+
+    senderPeerConnection.addEventListener('icecandidate', (e) => {
+      if (e.candidate) {
+        senderSocket.send(JSON.stringify({ type: 'signal', data: { candidate: e.candidate } }));
+      }
+    });
+
+    senderDataChannel = senderPeerConnection.createDataChannel('file');
+    senderDataChannel.binaryType = 'arraybuffer';
+
+    senderDataChannel.addEventListener('open', () => {
+      sendFileOverChannel();
+    });
+
+    senderPeerConnection.createOffer()
+      .then((offer) => senderPeerConnection.setLocalDescription(offer))
+      .then(() => {
+        senderSocket.send(JSON.stringify({ type: 'signal', data: { sdp: senderPeerConnection.localDescription } }));
+      });
+  }
+
+  function handleSenderSignal(data) {
+    if (data.sdp) {
+      senderPeerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    } else if (data.candidate) {
+      senderPeerConnection.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
+    }
+  }
+
+  function sendFileOverChannel() {
+    stubLabel.textContent = 'Connected · sending file';
+    sendProgressTrack.classList.add('show');
+    sendProgressPct.classList.add('show');
+    showStatus(sendStatus, 'Direct connection established. Sending…', 'info');
+
+    // Send a small header first so the receiver knows what's coming
+    senderDataChannel.send(JSON.stringify({
+      __header: true,
+      name: selectedFile.name,
+      size: selectedFile.size,
+      mime: selectedFile.type || 'application/octet-stream'
+    }));
+
+    let offset = 0;
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      if (senderDataChannel.readyState !== 'open') return;
+      senderDataChannel.send(e.target.result);
+      offset += e.target.result.byteLength;
+
+      const pct = Math.min(100, Math.round((offset / selectedFile.size) * 100));
+      sendProgressFill.style.width = pct + '%';
+      sendProgressPct.textContent = pct + '%';
+
+      if (offset < selectedFile.size) {
+        readNextChunk();
+      } else {
+        senderDataChannel.send(JSON.stringify({ __done: true }));
+        stubLabel.textContent = 'Transfer complete';
+        showStatus(sendStatus, 'File sent successfully. The code is now used up.', 'success');
+        sendBtn.disabled = false;
+      }
+    };
+
+    reader.onerror = () => {
+      showStatus(sendStatus, 'Error reading the file during transfer.', 'error');
+    };
+
+    function readNextChunk() {
+      const slice = selectedFile.slice(offset, offset + CHUNK_SIZE);
+      reader.readAsArrayBuffer(slice);
+    }
+
+    readNextChunk();
+  }
+
+  document.getElementById('copyCodeBtn').addEventListener('click', () => {
+    navigator.clipboard.writeText(stubCode.textContent).then(() => {
+      const btn = document.getElementById('copyCodeBtn');
+      const original = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(() => (btn.textContent = original), 1200);
+    });
+  });
+
+  // ====================== RECEIVE PANEL ======================
+  const codeInput = document.getElementById('codeInput');
+  const previewCard = document.getElementById('previewCard');
+  const previewName = document.getElementById('previewName');
+  const previewSize = document.getElementById('previewSize');
+  const receiveBtn = document.getElementById('receiveBtn');
+  const receiveStatus = document.getElementById('receiveStatus');
+  const receiveProgressTrack = document.getElementById('receiveProgressTrack');
+  const receiveProgressFill = document.getElementById('receiveProgressFill');
+  const receiveProgressPct = document.getElementById('receiveProgressPct');
+
+  let receiverSocket = null;
+  let receiverPeerConnection = null;
+  let pendingFileMeta = null;
+  let receivedChunks = [];
+  let receivedBytes = 0;
+  let incomingFileInfo = null;
+
+  codeInput.addEventListener('input', () => {
+    codeInput.value = codeInput.value.replace(/\D/g, '').slice(0, 4);
+    hideStatus(receiveStatus);
+    previewCard.classList.remove('show');
+    receiveBtn.disabled = codeInput.value.length !== 4;
+  });
+
+  receiveBtn.addEventListener('click', () => {
+    const code = codeInput.value;
+    if (code.length !== 4) return;
+
+    receiveBtn.disabled = true;
+    receiveBtn.textContent = 'Connecting…';
+    hideStatus(receiveStatus);
+
+    receiverSocket = new WebSocket(SIGNAL_URL);
+
+    receiverSocket.addEventListener('open', () => {
+      receiverSocket.send(JSON.stringify({ type: 'claim-code', code }));
+    });
+
+    receiverSocket.addEventListener('message', (event) => {
+      const msg = JSON.parse(event.data);
+
+      if (msg.type === 'claim-failed') {
+        showStatus(receiveStatus, msg.error, 'error');
+        receiveBtn.disabled = false;
+        receiveBtn.textContent = 'Connect & download';
+      }
+
+      if (msg.type === 'matched') {
+        pendingFileMeta = msg.fileMeta;
+        if (pendingFileMeta) {
+          previewName.textContent = pendingFileMeta.name;
+          previewSize.textContent = formatBytes(pendingFileMeta.size);
+          previewCard.classList.add('show');
+        }
+        showStatus(receiveStatus, 'Matched with sender. Establishing direct connection…', 'info');
+        startReceiverPeerConnection();
+      }
+
+      if (msg.type === 'signal') {
+        handleReceiverSignal(msg.data);
+      }
+
+      if (msg.type === 'peer-disconnected') {
+        showStatus(receiveStatus, 'Sender disconnected before the transfer finished.', 'error');
+        receiveBtn.disabled = false;
+        receiveBtn.textContent = 'Connect & download';
+      }
+    });
+
+    receiverSocket.addEventListener('error', () => {
+      showStatus(receiveStatus, 'Could not reach the signaling server.', 'error');
+      receiveBtn.disabled = false;
+      receiveBtn.textContent = 'Connect & download';
+    });
+  });
+
+  function startReceiverPeerConnection() {
+    receiverPeerConnection = new RTCPeerConnection(RTC_CONFIG);
+
+    receiverPeerConnection.addEventListener('icecandidate', (e) => {
+      if (e.candidate) {
+        receiverSocket.send(JSON.stringify({ type: 'signal', data: { candidate: e.candidate } }));
+      }
+    });
+
+    receiverPeerConnection.addEventListener('datachannel', (event) => {
+      const channel = event.channel;
+      channel.binaryType = 'arraybuffer';
+
+      receiveProgressTrack.classList.add('show');
+      receiveProgressPct.classList.add('show');
+      showStatus(receiveStatus, 'Connected. Receiving file…', 'info');
+
+      channel.addEventListener('message', (e) => {
+        if (typeof e.data === 'string') {
+          const parsed = JSON.parse(e.data);
+          if (parsed.__header) {
+            incomingFileInfo = parsed;
+            receivedChunks = [];
+            receivedBytes = 0;
+          } else if (parsed.__done) {
+            finishReceiving();
+          }
+          return;
+        }
+        // Binary chunk
+        receivedChunks.push(e.data);
+        receivedBytes += e.data.byteLength;
+        if (incomingFileInfo && incomingFileInfo.size) {
+          const pct = Math.min(100, Math.round((receivedBytes / incomingFileInfo.size) * 100));
+          receiveProgressFill.style.width = pct + '%';
+          receiveProgressPct.textContent = pct + '%';
+        }
+      });
+    });
+  }
+
+  function handleReceiverSignal(data) {
+    if (data.sdp) {
+      receiverPeerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp))
+        .then(() => receiverPeerConnection.createAnswer())
+        .then((answer) => receiverPeerConnection.setLocalDescription(answer))
+        .then(() => {
+          receiverSocket.send(JSON.stringify({ type: 'signal', data: { sdp: receiverPeerConnection.localDescription } }));
+        });
+    } else if (data.candidate) {
+      receiverPeerConnection.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
+    }
+  }
+
+  function finishReceiving() {
+    const blob = new Blob(receivedChunks, { type: incomingFileInfo.mime || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = incomingFileInfo.name || 'download';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    showStatus(receiveStatus, 'Downloaded. That code is now used up.', 'success');
+    receiveBtn.disabled = true;
+    receiveBtn.textContent = 'Connect & download';
+    previewCard.classList.remove('show');
+    codeInput.value = '';
+
+    receiverSocket.send(JSON.stringify({ type: 'transfer-complete' }));
+
+    receivedChunks = [];
+    receivedBytes = 0;
+  }
+</script>
+</body>
+</html>
